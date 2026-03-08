@@ -1,0 +1,64 @@
+# -----------------------------------------------------------------------
+# Integration-test-only mihomo config
+#
+# 网络隔离设计：
+#   1. allow-lan: false      —— 只监听 127.0.0.1，不暴露给局域网
+#   2. 无 tun / redir-port  —— 不接管系统流量，不建虚拟网卡
+#   3. dns.enable: false     —— 不接管系统 DNS
+#   4. 非标准端口 17890/19090 —— 不干扰用户已有的 Clash/Mihomo
+#   5. 所有 proxy 为 DIRECT  —— 无真实出站代理
+#
+# 测试范围：仅验证 REST API（port 19090），不经过 proxy port。
+# -----------------------------------------------------------------------
+
+mixed-port: 17890
+external-controller: 127.0.0.1:19090
+secret: "integration-test-secret"
+allow-lan: false
+mode: rule
+log-level: silent
+ipv6: false
+
+# 显式关闭 DNS 接管，不影响系统解析
+dns:
+  enable: false
+
+# 显式关闭所有透明代理 / TUN
+tun:
+  enable: false
+
+# 最小化 proxy 列表 —— 测试 API 格式，不发起任何实际连接
+proxies:
+  - name: "test-node-hk"
+    type: ss
+    server: 127.0.0.1
+    port: 19999
+    cipher: aes-256-gcm
+    password: "dummy-password"
+
+  - name: "test-node-sg"
+    type: ss
+    server: 127.0.0.1
+    port: 29999
+    cipher: aes-256-gcm
+    password: "dummy-password"
+
+proxy-groups:
+  - name: "PROXY"
+    type: select
+    proxies:
+      - DIRECT
+      - test-node-hk
+      - test-node-sg
+
+  - name: "AUTO"
+    type: url-test
+    proxies:
+      - test-node-hk
+      - test-node-sg
+    url: "http://127.0.0.1:19090/version"
+    interval: 86400
+
+rules:
+  - DOMAIN,localhost,DIRECT
+  - MATCH,PROXY

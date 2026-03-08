@@ -7,6 +7,9 @@ on:
     branches: [main]
 
 jobs:
+  # ------------------------------------------------------------------
+  # Unit tests (no real Mihomo needed, fast)
+  # ------------------------------------------------------------------
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -25,9 +28,46 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
-      - name: Run tests
+      - name: Run unit tests
         run: |
-          python -m pytest -v --tb=short
+          python -m pytest -v --tb=short -m "not integration"
+
+  # ------------------------------------------------------------------
+  # Integration tests (uses real Mihomo binary)
+  #
+  # 网络隔离：
+  #   - Mihomo 只绑定 127.0.0.1，无 TUN，无系统代理
+  #   - 测试只访问 REST API (port 19090)，不发任何代理流量
+  # ------------------------------------------------------------------
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Download Mihomo binary
+        run: |
+          MIHOMO_VERSION="v1.19.0"
+          URL="https://github.com/MetaCubeX/mihomo/releases/download/${MIHOMO_VERSION}/mihomo-linux-amd64-${MIHOMO_VERSION}.gz"
+          echo "Downloading Mihomo ${MIHOMO_VERSION}..."
+          wget -q "$URL" -O mihomo.gz
+          gunzip mihomo.gz
+          chmod +x mihomo
+          sudo mv mihomo /usr/local/bin/mihomo
+          mihomo -v
+
+      - name: Run integration tests
+        run: |
+          python -m pytest tests/integration/ -v --tb=short -m integration
 
   lint:
     runs-on: ubuntu-latest

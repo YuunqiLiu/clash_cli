@@ -28,3 +28,9 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "integration: requires a real mihomo binary (deselect with -m 'not integration')",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
