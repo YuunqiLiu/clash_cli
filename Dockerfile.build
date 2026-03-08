@@ -24,32 +24,42 @@ RUN pip3 install --no-cache-dir \
     "requests>=2.28" \
     "pyyaml>=6.0" \
     "keyring>=24.0" \
-    "SecretStorage>=3.3"
+    "SecretStorage>=3.3" \
+    "chardet>=5.0"
 
-# ── Download mihomo binary ────────────────────────────────────
+# ── Handle mihomo binary: copy local or download with retry ────
 ARG MIHOMO_VERSION=v1.19.0
-ARG MIHOMO_URL=https://github.com/MetaCubeX/mihomo/releases/download/${MIHOMO_VERSION}/mihomo-linux-amd64-${MIHOMO_VERSION}.gz
 
-RUN mkdir -p /src/vendor && \
-    echo "Downloading mihomo ${MIHOMO_VERSION}..." && \
-    curl -fsSL "${MIHOMO_URL}" -o /tmp/mihomo.gz && \
-    gunzip /tmp/mihomo.gz && \
-    # After gunzip the file may be named mihomo-linux-amd64-${MIHOMO_VERSION}
-    # or just mihomo depending on the archive; find and rename it.
-    find /tmp -maxdepth 1 -name "mihomo*" -type f | head -1 | xargs -I{} mv {} /src/vendor/mihomo && \
-    chmod +x /src/vendor/mihomo && \
-    /src/vendor/mihomo -v
+RUN mkdir -p /src/vendor
 
-# ── Copy source & install ─────────────────────────────────────
+# ── Copy source before mihomo download (for vendor/ check) ─────
 WORKDIR /src
 COPY pyproject.toml /src/
 COPY src/ /src/src/
-
-RUN pip3 install --no-cache-dir -e .
-
-# ── Copy entry point and spec ─────────────────────────────────
 COPY clash_cli_entry.py /src/clash_cli_entry.py
 COPY clash_cli.spec     /src/clash_cli.spec
+
+# Try to copy local vendor/mihomo if present; else download with retry
+RUN if [ -d vendor ] && [ -f vendor/mihomo ]; then \
+    echo "Using local vendor/mihomo"; \
+    cp vendor/mihomo /src/vendor/mihomo; \
+    else \
+    echo "Downloading mihomo ${MIHOMO_VERSION}..."; \
+    for attempt in 1 2 3; do \
+      echo "Attempt $attempt/3"; \
+      curl -fsSL --connect-timeout 10 --max-time 120 \
+        "https://github.com/MetaCubeX/mihomo/releases/download/${MIHOMO_VERSION}/mihomo-linux-amd64-${MIHOMO_VERSION}.gz" \
+        -o /tmp/mihomo.gz && \
+      gunzip /tmp/mihomo.gz && \
+      find /tmp -maxdepth 1 -name "mihomo*" -type f | head -1 | xargs -I{} mv {} /src/vendor/mihomo && \
+      echo "Download successful"; break || \
+      [ $attempt -lt 3 ] && echo "Retrying..." && sleep 5; \
+    done; \
+    fi && \
+    chmod +x /src/vendor/mihomo && \
+    /src/vendor/mihomo -v
+
+RUN pip3 install --no-cache-dir -e .
 
 # ── Build with PyInstaller ────────────────────────────────────
 RUN pyinstaller clash_cli.spec --clean --noconfirm && \

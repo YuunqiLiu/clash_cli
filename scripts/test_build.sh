@@ -138,7 +138,9 @@ echo ""
 echo "── clash status ──"
 
 STATUS_OUT=$("${BIN}" --json status 2>&1 || true)
-if echo "${STATUS_OUT}" | python3 -c "
+# Filter out requests dependency warnings from stderr
+STATUS_CLEAN=$(echo "${STATUS_OUT}" | grep -v "RequestsDependencyWarning" || echo "${STATUS_OUT}")
+if echo "${STATUS_CLEAN}" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
 assert d['status'] == 'ok'
@@ -150,7 +152,9 @@ else
 fi
 
 HUMAN_OUT=$("${BIN}" status 2>&1 || true)
-if echo "${HUMAN_OUT}" | grep -qi "not running\|○"; then
+# Filter out requests dependency warnings
+HUMAN_CLEAN=$(echo "${HUMAN_OUT}" | grep -v "RequestsDependencyWarning" || echo "${HUMAN_OUT}")
+if echo "${HUMAN_CLEAN}" | grep -qi "not running\|○"; then
     pass "clash status (human) shows not-running message"
 else
     fail "clash status (human) shows not-running message" "Output: ${HUMAN_OUT}"
@@ -162,7 +166,9 @@ echo ""
 echo "── clash profile list ──"
 
 LIST_OUT=$("${BIN}" --json profile list 2>&1 || true)
-if echo "${LIST_OUT}" | python3 -c "
+# Filter out requests dependency warnings
+LIST_CLEAN=$(echo "${LIST_OUT}" | grep -v "RequestsDependencyWarning" || echo "${LIST_OUT}")
+if echo "${LIST_CLEAN}" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
 assert d['status'] == 'ok'
@@ -182,8 +188,10 @@ echo "── mihomo bundled check ──"
 # - If mihomo IS bundled: error is PROFILE_NOT_FOUND
 # - If mihomo is NOT bundled: error is MIHOMO_NOT_FOUND
 BUNDLED_OUT=$("${BIN}" --json start --profile __nonexistent_profile__ 2>&1 || true)
+# Filter out requests dependency warnings
+BUNDLED_CLEAN=$(echo "${BUNDLED_OUT}" | grep -v "RequestsDependencyWarning" || echo "${BUNDLED_OUT}")
 
-if echo "${BUNDLED_OUT}" | python3 -c "
+if echo "${BUNDLED_CLEAN}" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
 assert d['status'] == 'error'
@@ -192,7 +200,7 @@ assert d['error']['code'] == 'PROFILE_NOT_FOUND', f\"Got: {d['error']['code']}\"
     pass "mihomo binary is bundled (find_mihomo via sys._MEIPASS)"
 else
     # Check if it's at least getting past find_mihomo
-    if echo "${BUNDLED_OUT}" | grep -q "MIHOMO_NOT_FOUND"; then
+    if echo "${BUNDLED_CLEAN}" | grep -q "MIHOMO_NOT_FOUND"; then
         fail "mihomo binary is bundled" "Got MIHOMO_NOT_FOUND — mihomo not in bundle"
     else
         fail "mihomo bundled check" "Unexpected output: ${BUNDLED_OUT}"

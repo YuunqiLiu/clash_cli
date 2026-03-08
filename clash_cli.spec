@@ -15,6 +15,7 @@
 
 import os
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_submodules
 
 # vendor/mihomo must exist at build time (downloaded by Dockerfile.build)
 MIHOMO_BIN = Path(SPECPATH) / "vendor" / "mihomo"
@@ -59,11 +60,13 @@ a = Analysis(
         "keyring.backends.SecretService",
         "keyring.backends.fail",
         "keyring.backends.null",
-    ],
+        "chardet",
+        # Standard library modules (must collect submodules for email, urllib3)
+    ] + collect_submodules("email") + collect_submodules("urllib3"),
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["tkinter", "unittest", "email", "xml", "pdb", "doctest"],
+    excludes=["tkinter", "unittest", "xml", "pdb", "doctest"],
     noarchive=False,
 )
 

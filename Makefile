@@ -36,6 +36,7 @@ build:
 	@echo "============================================================"
 	mkdir -p $(BUILD_DIR)
 	docker build \
+		--network host \
 		--build-arg MIHOMO_VERSION=$(MIHOMO_VERSION) \
 		-f Dockerfile.build \
 		-t $(BUILD_TAG) \
