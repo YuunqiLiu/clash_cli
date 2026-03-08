@@ -6,6 +6,7 @@ import os
 import shutil
 import signal
 import subprocess
+import sys
 import time
 import uuid
 from datetime import datetime, timezone
@@ -37,14 +38,22 @@ def find_mihomo() -> str:
 
     Search order:
     1. ``$CLASH_MIHOMO_PATH`` environment variable
-    2. Same directory as the ``clash`` executable
-    3. ``mihomo`` on ``$PATH``
+    2. PyInstaller one-file bundle (``sys._MEIPASS/mihomo``)
+    3. Same directory as the ``clash`` executable
+    4. ``mihomo`` on ``$PATH``
 
     Returns the absolute path, or raises :class:`ClashError`.
     """
     env = os.environ.get("CLASH_MIHOMO_PATH")
     if env and os.path.isfile(env) and os.access(env, os.X_OK):
         return env
+
+    # PyInstaller one-file mode: binaries are extracted to sys._MEIPASS
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidate = Path(meipass) / "mihomo"
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
 
     # Next to this script / frozen exe
     here = Path(__file__).resolve().parent.parent

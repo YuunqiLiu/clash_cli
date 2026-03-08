@@ -1,0 +1,84 @@
+name: Test & Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  # ----------------------------------------------------------------
+  # Test source code on every push / PR
+  # No binary build here — fast, no Docker needed.
+  # ----------------------------------------------------------------
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run unit tests
+        run: make test-unit
+
+  # ----------------------------------------------------------------
+  # Build & release — only on version tags (v*)
+  #
+  # Steps:
+  #   1. Unit tests must pass first (needs: test)
+  #   2. Build the standalone binary via Docker (Dockerfile.build)
+  #      → downloads mihomo, bundles with PyInstaller, glibc 2.17
+  #   3. Test the binary on bare CentOS 7 (scripts/test_build.sh)
+  #   4. Package and publish as GitHub Release
+  # ----------------------------------------------------------------
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR (pull build base image)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build clash binary
+        run: |
+          # Extract version from tag (e.g. v0.2.0 → 0.2.0) for mihomo
+          MIHOMO_VERSION=v1.19.0
+          make build MIHOMO_VERSION=${MIHOMO_VERSION}
+
+      - name: Test binary on CentOS 7
+        run: make test-build
+
+      - name: Package release archive
+        run: |
+          mkdir -p release
+          cp build/clash release/clash
+          chmod +x release/clash
+          cd release
+          tar czf ../clash-linux-x86_64.tar.gz clash
+          echo "Archive contents:"
+          tar tzf ../clash-linux-x86_64.tar.gz
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: clash-linux-x86_64.tar.gz
+          generate_release_notes: true

@@ -1,0 +1,60 @@
+# ── Build environment for clash_cli PyInstaller binary ────────
+#
+# Base: ghcr.io/yuunqiliu/centos7-gcc14 (CentOS 7.9, gcc 14.2,
+#       Python 3.10.16, glibc 2.17, PyInstaller 6.13.0 pre-installed)
+#
+# Steps:
+#   1. Install Python deps (requests, pyyaml, keyring)
+#   2. Download the mihomo binary → vendor/mihomo
+#   3. Install clash_cli itself
+#   4. Run PyInstaller → dist/clash
+#
+# The resulting binary links only to glibc 2.17, runs on any Linux x86_64.
+
+FROM ghcr.io/yuunqiliu/centos7-gcc14:latest AS builder
+
+ENV PREFIX=/opt/python310
+ENV PATH="${PREFIX}/bin:${PATH}"
+
+# Verify Python 3.10 and PyInstaller are available
+RUN python3 --version | grep -q "3.10" && pyinstaller --version
+
+# ── Install Python runtime dependencies ──────────────────────
+RUN pip3 install --no-cache-dir \
+    "requests>=2.28" \
+    "pyyaml>=6.0" \
+    "keyring>=24.0" \
+    "SecretStorage>=3.3"
+
+# ── Download mihomo binary ────────────────────────────────────
+ARG MIHOMO_VERSION=v1.19.0
+ARG MIHOMO_URL=https://github.com/MetaCubeX/mihomo/releases/download/${MIHOMO_VERSION}/mihomo-linux-amd64-${MIHOMO_VERSION}.gz
+
+RUN mkdir -p /src/vendor && \
+    echo "Downloading mihomo ${MIHOMO_VERSION}..." && \
+    curl -fsSL "${MIHOMO_URL}" -o /tmp/mihomo.gz && \
+    gunzip /tmp/mihomo.gz && \
+    # After gunzip the file may be named mihomo-linux-amd64-${MIHOMO_VERSION}
+    # or just mihomo depending on the archive; find and rename it.
+    find /tmp -maxdepth 1 -name "mihomo*" -type f | head -1 | xargs -I{} mv {} /src/vendor/mihomo && \
+    chmod +x /src/vendor/mihomo && \
+    /src/vendor/mihomo -v
+
+# ── Copy source & install ─────────────────────────────────────
+WORKDIR /src
+COPY pyproject.toml /src/
+COPY src/ /src/src/
+
+RUN pip3 install --no-cache-dir -e .
+
+# ── Copy entry point and spec ─────────────────────────────────
+COPY clash_cli_entry.py /src/clash_cli_entry.py
+COPY clash_cli.spec     /src/clash_cli.spec
+
+# ── Build with PyInstaller ────────────────────────────────────
+RUN pyinstaller clash_cli.spec --clean --noconfirm && \
+    strip --strip-unneeded /src/dist/clash 2>/dev/null || true && \
+    ls -lh /src/dist/clash
+
+# ── The final binary is at /src/dist/clash ────────────────────
+CMD ["echo", "Done. Copy /src/dist/clash out of the container."]

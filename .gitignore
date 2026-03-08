@@ -4,9 +4,12 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+vendor/
 *.egg
 .eggs/
 *.spec
+# But track our hand-crafted PyInstaller spec (generated ones go to dist/)
+!clash_cli.spec
 .pytest_cache/
 .tox/
 .coverage

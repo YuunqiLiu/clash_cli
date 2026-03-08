@@ -39,6 +39,18 @@ class TestFindMihomo:
                 find_mihomo()
             assert exc.value.code == "MIHOMO_NOT_FOUND"
 
+    def test_meipass_bundled(self, tmp_path, monkeypatch):
+        """Binary found in sys._MEIPASS (PyInstaller one-file bundle)."""
+        fake = tmp_path / "mihomo"
+        fake.write_text("#!/bin/sh\n")
+        fake.chmod(0o755)
+        monkeypatch.delenv("CLASH_MIHOMO_PATH", raising=False)
+        import clash_cli.daemon.launcher as _launcher
+        monkeypatch.setattr(_launcher.sys, "_MEIPASS", str(tmp_path), raising=False)
+        monkeypatch.setattr("shutil.which", lambda _: None)
+        result = find_mihomo()
+        assert result == str(fake)
+
     def test_on_path(self, monkeypatch):
         monkeypatch.delenv("CLASH_MIHOMO_PATH", raising=False)
         with patch("shutil.which", return_value="/usr/local/bin/mihomo"):
